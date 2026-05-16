@@ -112,7 +112,9 @@ export function calculateStock(stock) {
 export function buildReasons(stock, r) {
   const i = stock.internal;
   const bestExternal = [...stock.external].sort((a, b) => b.score - a.score)[0];
-  const pressureExternal = [...stock.external].filter((x) => x.impact.includes("ضاغط")).sort((a, b) => b.score - a.score)[0];
+  const pressureExternal = [...stock.external]
+    .filter((x) => x.impact.includes("ضاغط") && x.name !== bestExternal?.name)
+    .sort((a, b) => b.score - a.score)[0];
 
   return {
     decision: {
@@ -140,7 +142,7 @@ export function buildReasons(stock, r) {
           ? "شرط تغيير قرار البيع: تحسن واضح في اتفاق الأدلة، انخفاض مستوى المخاطرة، وظهور سيولة تسمح بتنفيذ آمن. بدون ذلك، يظل تجنب الدخول أفضل."
           : "ما ننتظره قبل اتخاذ قرار: تحسن اتفاق الأدلة، زيادة السيولة، انخفاض المخاطرة، أو ظهور شراء منظم واضح. الانتظار هنا ليس ترددًا، بل انتظار دليل أقوى.",
       external: bestExternal ? `${bestExternal.name}: ${bestExternal.impact} — ${bestExternal.explanation}` : "لا يوجد عامل خارجي حاسم.",
-      externalRisk: pressureExternal ? `${pressureExternal.name}: ${pressureExternal.impact} — ${pressureExternal.explanation}` : "لا يوجد ضغط خارجي واضح حاليًا.",
+      externalRisk: pressureExternal ? `${pressureExternal.name}: ${pressureExternal.impact} — ${pressureExternal.explanation}` : "لا يوجد ضغط خارجي إضافي مختلف عن العامل الرئيسي.",
     },
     stockScore: {
       meaning: `تقييم السهم هو ${r.stockScore} من 100. هذا الرقم يلخص جودة السهم من الداخل: هل يوجد طلب واضح؟ هل البيع ضعيف؟ هل السيولة تساعد؟ وهل المخاطر ليست مبالغًا فيها؟`,
