@@ -21,8 +21,8 @@ import {
   BookOpen,
   Info,
 } from "lucide-react";
-import { GENERAL_EXPLANATION_CLASS, stocks, glossary } from "./data.js";
-import { clamp, trendSummary } from "./calculations.js";
+import { GENERAL_EXPLANATION_CLASS, glossary } from "./dataLoader.js";
+import { clamp } from "./calculations.js";
 
 export function toneClasses(tone) {
   const map = {
@@ -139,6 +139,18 @@ export function ReasonList({ title, items, icon: Icon = CheckCircle2 }) {
   );
 }
 
+export function DataStatus({ meta, loading, error }) {
+  if (loading) return <Card><CardContent className="p-4 text-sm leading-7">جاري تحميل ملف EGX30_with_WSV.csv من داخل الموقع...</CardContent></Card>;
+  if (error) return <Card><CardContent className="p-4 text-sm leading-7 text-rose-700 bg-rose-50 rounded-3xl border border-rose-200">{error}</CardContent></Card>;
+  return (
+    <Card>
+      <CardContent className="p-4 text-sm leading-7 text-emerald-800 bg-emerald-50 rounded-3xl border border-emerald-200">
+        البيانات محملة مباشرة من ملف Kaggle داخل المشروع: {meta?.symbolCount} سهم، {meta?.rowCount} يوم/صف، من {meta?.dateFrom} إلى {meta?.dateTo}. لا يوجد Supabase ولا SQL في هذه النسخة.
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ClientGlossary() {
   return (
     <section>
@@ -155,7 +167,7 @@ export function ClientGlossary() {
   );
 }
 
-export function DecisionHeader({ stock, result, setSymbol }) {
+export function DecisionHeader({ stocks, stock, result, setSymbol }) {
   const Icon = result.decision === "شراء" ? ArrowUpRight : result.decision === "بيع" ? ArrowDownRight : Minus;
   return (
     <Card className="overflow-hidden">
@@ -167,11 +179,11 @@ export function DecisionHeader({ stock, result, setSymbol }) {
               <span>EGX Institutional Decision Engine</span>
             </div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tight">{stock.name}</h1>
-            <p className="text-slate-500 mt-2">{stock.symbol} · {stock.sector} · السعر الحالي التجريبي: {stock.price}</p>
+            <p className="text-slate-500 mt-2">{stock.symbol} · {stock.sector} · آخر تاريخ: {stock.sourceDate} · السعر: {stock.price}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <select value={stock.symbol} onChange={(e) => setSymbol(e.target.value)} className="w-full sm:w-60 rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-slate-300">
-              {Object.keys(stocks).map((s) => <option key={s} value={s}>{s} — {stocks[s].name}</option>)}
+              {Object.keys(stocks).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <div className={`rounded-3xl px-6 py-4 min-w-44 text-center shadow-sm ${decisionClasses(result.decision)}`}>
               <div className="flex items-center justify-center gap-2 text-sm opacity-90">
@@ -271,8 +283,8 @@ export function InstitutionalExecution({ stock, result }) {
       <Card>
         <CardContent className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <MetricBox title="متوسط التداول اليومي" value={`${stock.avgDailyValueM} مليون جنيه`} explanation="شرح عام: حجم الأموال المتداولة تقريبًا على السهم في اليوم." />
-            <MetricBox title="أمر مؤسسي افتراضي" value={`${stock.institutionalOrderM} مليون جنيه`} explanation="شرح عام: مثال لحجم أمر كبير نختبر به قدرة السهم على تحمل دخول مؤسسة." />
+            <MetricBox title="متوسط التداول اليومي" value={`${stock.avgDailyValueM} مليون`} explanation="شرح عام: قيمة التداول اليومية المتوسطة المقدرة من السعر والحجم." />
+            <MetricBox title="أمر مؤسسي افتراضي" value={`${stock.institutionalOrderM} مليون`} explanation="شرح عام: مثال لحجم أمر كبير نختبر به قدرة السهم على تحمل دخول مؤسسة." />
             <MetricBox title="نسبة الأمر للسيولة" value={`${Math.round(result.orderToLiquidityRatio * 100)}%`} explanation="شرح عام: كلما زادت النسبة، زاد احتمال تأثير الأمر على السعر." />
             <MetricBox title="خطة التنفيذ" value={`${result.suggestedSessions} جلسة تقريبًا`} explanation="شرح عام: عدد الجلسات المقترح لتوزيع الأمر وتقليل أثره." />
           </div>
@@ -284,9 +296,17 @@ export function InstitutionalExecution({ stock, result }) {
 }
 
 export function TimelineSection({ stock }) {
-  const summary = trendSummary(stock.timeline);
   const first = stock.timeline[0];
   const last = stock.timeline[stock.timeline.length - 1];
+  const diffStock = last.stockScore - first.stockScore;
+  const diffLiquidity = last.liquidity - first.liquidity;
+  const diffEvidence = last.evidence - first.evidence;
+  const conclusion = [diffStock, diffLiquidity, diffEvidence].every((x) => x > 0)
+    ? "القراءة تتحسن بوضوح: تقييم السهم والسيولة واتفاق الأدلة يتحركون في نفس الاتجاه."
+    : [diffStock, diffLiquidity, diffEvidence].every((x) => x < 0)
+    ? "القراءة تتدهور بوضوح: تقييم السهم والسيولة واتفاق الأدلة ينخفضون معًا."
+    : "القراءة مختلطة: بعض العناصر تتحسن وبعضها لا يؤكد ذلك. في هذه الحالة لا نندفع، بل ننتظر دليلًا أوضح.";
+
   return (
     <section>
       <SectionTitle icon={Activity} title="هل القراءة تتحسن أم تتدهور؟" subtitle="شرح عام: الرقم الحالي وحده قد يخدع، لذلك نراجع اتجاه الأرقام خلال آخر جلسات." />
@@ -298,7 +318,7 @@ export function TimelineSection({ stock }) {
             <MetricBox title="اتفاق الأدلة" value={`${first.evidence} ← ${last.evidence}`} explanation="شرح عام: هل المؤشرات أصبحت أكثر اتفاقًا أم أكثر تناقضًا؟" />
           </CardContent>
         </Card>
-        <Card><CardContent className="p-5"><div className="rounded-3xl bg-slate-50 border border-slate-200 p-4 text-sm leading-7 font-bold">{summary.conclusion}</div></CardContent></Card>
+        <Card><CardContent className="p-5"><div className="rounded-3xl bg-slate-50 border border-slate-200 p-4 text-sm leading-7 font-bold">{conclusion}</div></CardContent></Card>
       </div>
     </section>
   );
@@ -351,7 +371,7 @@ export function RelationshipMap({ result }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <RelationshipCard title="العلاقات الداخلية" tone={internalTone} items={["شراء منظم يدعم السهم.", "ضعف ضغط البيع يجعل الصعود أسهل.", "ارتفاع المخاطر يخصم من القرار."]} conclusion={result.evidenceAgreement >= 65 ? "العلاقات الداخلية في هذه القراءة متوافقة." : "العلاقات الداخلية في هذه القراءة غير كافية أو مختلطة."} />
         <RelationshipCard title="علاقات التنفيذ" tone={executionTone} items={["السيولة تحدد هل يمكن تنفيذ القرار.", "حجم الأمر الكبير قد يكشف دخول المؤسسة.", "التنفيذ التدريجي يقلل الأثر على السعر."]} conclusion={executionTone === "success" ? "التنفيذ في هذه القراءة قابل للإدارة." : "التنفيذ في هذه القراءة يحتاج حذرًا أكبر."} />
-        <RelationshipCard title="العلاقات الخارجية" tone={externalTone} items={["الدولار أو الفائدة أو المؤشر قد يدعمون أو يضغطون.", "العامل الخارجي يفسر البيئة المحيطة بالسهم.", "العامل الخارجي لا يكفي وحده لإصدار القرار."]} conclusion={result.externalSupport >= 60 ? "البيئة الخارجية في هذه القراءة تساعد." : "البيئة الخارجية في هذه القراءة لا تعطي دعمًا حاسمًا."} />
+        <RelationshipCard title="العلاقات الخارجية" tone={externalTone} items={["مزاج السوق أو الأخبار قد يدعمون أو يضغطون.", "العامل الخارجي يفسر البيئة المحيطة بالسهم.", "العامل الخارجي لا يكفي وحده لإصدار القرار."]} conclusion={result.externalSupport >= 60 ? "البيئة الخارجية في هذه القراءة تساعد." : "البيئة الخارجية في هذه القراءة لا تعطي دعمًا حاسمًا."} />
       </div>
     </section>
   );
@@ -398,6 +418,7 @@ export function LogicTests({ stock, result }) {
     { label: "كل سهم لديه عوامل خارجية", pass: stock.external.every((x) => x.name && x.explanation), explanation: "حتى لا تظهر عوامل بلا تفسير." },
     { label: "خريطة العلاقات مكتملة بثلاثة محاور", pass: Boolean(result.evidenceAgreement >= 0 && result.externalSupport >= 0 && result.buildPositionScore >= 0), explanation: "حتى لا ينقطع التقرير عند العلاقات الداخلية أو الخارجية." },
   ];
+
   return (
     <section>
       <SectionTitle icon={CheckCircle2} title="اختبارات منطق الحساب" subtitle="شرح عام: هذه الاختبارات تمنع تناقضات مثل شراء مع خطر مرتفع جدًا أو رقم بلا تفسير." />
