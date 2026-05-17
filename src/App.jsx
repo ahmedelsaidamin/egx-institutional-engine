@@ -12,6 +12,7 @@ import {
   InstitutionalExecution,
   TimelineSection,
   ExternalFactors,
+  TechnicalConfirmation,
   RelationshipMap,
   InvestorFit,
   LogicTests,
@@ -166,6 +167,7 @@ function PulseRadar({ stocks, results, setSymbol, setActiveView }) {
                 <MiniScore title="تقييم السهم" value={result.stockScore} />
                 <MiniScore title="اتفاق الأدلة" value={result.evidenceAgreement} />
                 <MiniScore title="المخاطرة" value={result.riskLevel} risk />
+                <MiniScore title="Technical Score" value={result.technical?.technicalScore ?? 0} />
               </div>
               <div className="text-sm leading-7 text-slate-600">{result.reasons.decision.weakness}</div>
               <button
@@ -231,6 +233,9 @@ function CompareView({ stocks, results, symbol, setSymbol }) {
     ["قابلية بناء مركز", leftResult.buildPositionScore, rightResult.buildPositionScore],
     ["خطر كشف الدخول", leftResult.entryExposureRisk, rightResult.entryExposureRisk, "risk"],
     ["الدعم الخارجي", leftResult.externalSupport, rightResult.externalSupport],
+    ["Technical Score", leftResult.technical?.technicalScore ?? 0, rightResult.technical?.technicalScore ?? 0],
+    ["قوة القرار بعد التأكيد", leftResult.technical?.adjustedInstitutionalScore ?? 0, rightResult.technical?.adjustedInstitutionalScore ?? 0],
+    ["درجة الثقة النهائية", leftResult.technical?.confidenceLevel ?? 0, rightResult.technical?.confidenceLevel ?? 0],
   ];
 
   return (
@@ -298,6 +303,7 @@ function ReportView({ stocks, stock, result, setSymbol }) {
       <InstitutionalExecution stock={stock} result={result} />
       <TimelineSection stock={stock} />
       <ExternalFactors stock={stock} />
+      <TechnicalConfirmation result={result} />
       <RelationshipMap result={result} />
       <InvestorFit result={result} />
       <LogicTests stock={stock} result={result} />
@@ -361,7 +367,7 @@ export default function EGXInstitutionalDecisionEngine() {
             {activeView === "radar" && <PulseRadar stocks={stocks} results={results} setSymbol={setSymbol} setActiveView={setActiveView} />}
             {activeView === "compare" && <CompareView stocks={stocks} results={results} symbol={symbol} setSymbol={setSymbol} />}
             <div className="pb-8 text-center text-xs text-slate-500 leading-6">
-              نسخة Upload Ready + Features: تقرأ ملف EGX30_with_WSV.csv مباشرة، وتضيف Pulse Radar و Compare بدون Supabase أو SQL.
+              نسخة Upload Ready + Features: تقرأ ملف EGX30_with_WSV.csv مباشرة، وتضيف Pulse Radar و Compare و Technical Confirmation بدون Supabase أو SQL.
             </div>
           </>
         )}

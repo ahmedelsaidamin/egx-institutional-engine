@@ -408,6 +408,95 @@ export function InvestorFit({ result }) {
   );
 }
 
+
+function technicalTone(summary) {
+  if (summary === "Buy" || summary === "Weak Buy") return "success";
+  if (summary === "Sell" || summary === "Weak Sell") return "danger";
+  return "warning";
+}
+
+export function TechnicalConfirmation({ result }) {
+  const t = result.technical;
+  if (!t) return null;
+
+  const summaryMeaning =
+    t.summary === "Buy"
+      ? "القراءة الفنية قوية وتميل للشراء."
+      : t.summary === "Weak Buy"
+      ? "القراءة إيجابية لكن ليست قوية بما يكفي وحدها."
+      : t.summary === "Neutral"
+      ? "القراءة الفنية محايدة ولا ترجح الشراء أو البيع بوضوح."
+      : t.summary === "Weak Sell"
+      ? "القراءة سلبية نسبيًا لكنها ليست بيعًا قويًا."
+      : "القراءة الفنية ضعيفة وتميل للبيع أو تجنب الدخول.";
+
+  return (
+    <section>
+      <SectionTitle
+        icon={BarChart3}
+        title="تأكيد التحليل الفني الشبيه بـ Investing.com"
+        subtitle="شرح عام: هذا القسم لا يسحب بيانات من Investing.com، لكنه يبني قراءة فنية مشابهة من مؤشرات السهم الموجودة عندنا، ثم يوضح هل تؤكد قرار الموقع أم تعارضه."
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="xl:col-span-2">
+          <CardContent className="p-5 space-y-4">
+            <div className={`rounded-2xl border p-3 text-sm leading-7 ${generalExplanationClasses()}`}>
+              <div className="font-black mb-2">شرح عام: تحويل Technical Score إلى قراءة فنية لفظية</div>
+              <div>لو Technical Score أكبر من أو يساوي 70 → <b>Buy</b>: يعني القراءة الفنية قوية وتميل للشراء.</div>
+              <div>لو Technical Score من 55 إلى أقل من 70 → <b>Weak Buy</b>: يعني القراءة إيجابية لكن ليست قوية بما يكفي وحدها.</div>
+              <div>لو Technical Score من 45 إلى أقل من 55 → <b>Neutral</b>: يعني القراءة الفنية محايدة ولا ترجح الشراء أو البيع بوضوح.</div>
+              <div>لو Technical Score من 30 إلى أقل من 45 → <b>Weak Sell</b>: يعني القراءة سلبية نسبيًا لكنها ليست بيعًا قويًا.</div>
+              <div>لو Technical Score أقل من 30 → <b>Sell</b>: يعني القراءة الفنية ضعيفة وتميل للبيع أو تجنب الدخول.</div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <MetricBox title="Technical Score" value={`${t.technicalScore}/100`} explanation="شرح عام: رقم يلخص RSI وMACD وSMA_50 والعائد والحجم والاختراق." />
+              <MetricBox title="Technical Summary" value={t.summary} explanation={summaryMeaning} />
+              <MetricBox title="درجة التأكيد" value={`${t.externalConfirmationScore > 0 ? "+" : ""}${t.externalConfirmationScore}`} explanation="شرح عام: رقم موجب يعني تأكيد، ورقم سالب يعني تعارض." />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <MetricBox title="قوة القرار قبل التأكيد" value={result.institutionalScore} explanation="قوة قرار الموقع قبل إضافة التأكيد الفني." />
+              <MetricBox title="قوة القرار بعد التأكيد" value={t.adjustedInstitutionalScore} explanation="القوة بعد إضافة أو خصم درجة التأكيد الفني." />
+              <MetricBox title="درجة الثقة النهائية" value={t.confidenceLevel} explanation="تجمع قوة القرار والتحليل الفني واتفاق الأدلة مع خصم التعارض." />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={toneClasses(technicalTone(t.summary))}>
+          <CardContent className="p-5 space-y-3">
+            <h3 className="font-black text-xl">نتيجة التأكيد</h3>
+            <div className="rounded-2xl bg-white/70 p-3 text-sm leading-7">
+              <div><b>قرار موقعنا:</b> {result.decision}</div>
+              <div><b>التحليل الفني:</b> {t.summary}</div>
+              <div><b>الحالة:</b> {t.confirmationLabel}</div>
+              <div><b>القرار بعد التأكيد:</b> {t.adjustedDecision}</div>
+              <div><b>القرار بعد بوابة التنفيذ:</b> {t.finalDecision}</div>
+            </div>
+            <div className="rounded-2xl bg-white/70 p-3 text-sm leading-7 font-bold">{t.executionGateNote}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+        {t.signals.map((signal) => (
+          <Card key={signal.name}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-black">{signal.name}</h3>
+                <span className={`rounded-full border px-2 py-1 text-xs font-bold ${toneClasses(technicalTone(signal.label))}`}>{signal.label}</span>
+              </div>
+              <ScoreBar value={Math.round((signal.value + 1) * 50)} left="سلبي" right="إيجابي" />
+              <p className="text-sm leading-7 text-slate-600">{signal.explanation}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function LogicTests({ stock, result }) {
   const scores = [result.stockScore, result.evidenceAgreement, result.riskLevel, result.buildPositionScore, result.entryExposureRisk, result.externalSupport, result.institutionalScore];
   const tests = [

@@ -107,7 +107,9 @@ export function calculateStock(stock) {
     orderToLiquidityRatio,
   };
 
-  return { ...result, reasons: buildReasons(stock, result) };
+  const technical = calculateTechnicalConfirmation(stock, result);
+
+  return { ...result, technical, reasons: buildReasons(stock, result) };
 }
 
 export function buildReasons(stock, r) {
@@ -191,5 +193,207 @@ export function buildReasons(stock, r) {
         i.liquidityQuality >= 65 ? "السيولة تساعد على إخفاء التنفيذ: وجود تداول كافٍ يجعل أوامر الشراء أو البيع أقل ظهورًا." : "السيولة لا تكفي لإخفاء التنفيذ بالكامل: أي أمر كبير قد يظهر بسرعة في حركة السعر أو حجم التداول.",
       ],
     },
+  };
+}
+
+
+export function decisionToValue(decision) {
+  if (decision === "شراء") return 1;
+  if (decision === "بيع") return -1;
+  return 0;
+}
+
+export function technicalValue(summary) {
+  if (summary === "Buy") return 1;
+  if (summary === "Weak Buy") return 0.5;
+  if (summary === "Weak Sell") return -0.5;
+  if (summary === "Sell") return -1;
+  return 0;
+}
+
+export function technicalSummaryFromScore(score) {
+  if (score >= 70) return "Buy";
+  if (score >= 55) return "Weak Buy";
+  if (score >= 45) return "Neutral";
+  if (score >= 30) return "Weak Sell";
+  return "Sell";
+}
+
+export function confirmationLabel(adjustment) {
+  if (adjustment >= 8) return "تأكيد فني قوي";
+  if (adjustment >= 3) return "تأكيد فني متوسط";
+  if (adjustment > -3) return "محايد";
+  if (adjustment > -8) return "تعارض فني متوسط";
+  return "تعارض فني قوي";
+}
+
+function adjustedDecisionFromScore(score) {
+  if (score >= 70) return "شراء";
+  if (score < 49) return "بيع";
+  return "انتظار";
+}
+
+function signalLabel(value) {
+  if (value >= 1) return "Buy";
+  if (value > 0) return "Weak Buy";
+  if (value === 0) return "Neutral";
+  if (value <= -1) return "Sell";
+  return "Weak Sell";
+}
+
+export function calculateTechnicalConfirmation(stock, institutionalResult) {
+  const m = stock.market || {};
+  const close = Number(m.close ?? stock.price ?? 0);
+  const open = Number(m.open ?? close);
+  const high = Number(m.high ?? close);
+  const low = Number(m.low ?? close);
+  const volume = Number(m.volume ?? 0);
+  const avgVolume20 = Number(m.avgVolume20 ?? volume ?? 0);
+  const rsi = Number(m.rsi);
+  const macd = Number(m.macd);
+  const prevMacd = Number(m.prevMacd);
+  const sma50 = Number(m.sma50);
+  const logReturn = Number(m.logReturn ?? 0);
+  const high20 = Number(m.high20 ?? high);
+  const low20 = Number(m.low20 ?? low);
+
+  let rsiSignal = 0;
+  if (Number.isFinite(rsi)) {
+    if (rsi < 30) rsiSignal = 1;
+    else if (rsi < 45) rsiSignal = 0.5;
+    else if (rsi <= 55) rsiSignal = 0;
+    else if (rsi <= 70) rsiSignal = 0.5;
+    else rsiSignal = -0.5;
+  }
+
+  const macdSignal = Number.isFinite(macd) ? (macd > 0 ? 1 : macd < 0 ? -1 : 0) : 0;
+  const macdMomentum = Number.isFinite(macd) && Number.isFinite(prevMacd) ? (macd > prevMacd ? 0.5 : macd < prevMacd ? -0.5 : 0) : 0;
+  const macdTotal = Math.max(-1, Math.min(1, macdSignal + macdMomentum));
+
+  const priceVsSma = close && sma50 ? ((close - sma50) / sma50) * 100 : 0;
+  let smaSignal = 0;
+  if (priceVsSma > 3) smaSignal = 1;
+  else if (priceVsSma > 0) smaSignal = 0.5;
+  else if (priceVsSma >= -1 && priceVsSma <= 1) smaSignal = 0;
+  else if (priceVsSma >= -3) smaSignal = -0.5;
+  else smaSignal = -1;
+
+  let returnSignal = 0;
+  if (logReturn > 0.01) returnSignal = 1;
+  else if (logReturn > 0) returnSignal = 0.5;
+  else if (logReturn >= -0.01) returnSignal = 0;
+  else returnSignal = -1;
+
+  const volumeRatio = avgVolume20 > 0 ? volume / avgVolume20 : 1;
+  let volumeSignal = 0;
+  if (volumeRatio >= 1.5 && close > open) volumeSignal = 1;
+  else if (volumeRatio >= 1.2 && close > open) volumeSignal = 0.5;
+  else if (volumeRatio >= 1.5 && close < open) volumeSignal = -1;
+  else if (volumeRatio >= 1.2 && close < open) volumeSignal = -0.5;
+
+  const distanceFromHigh = high20 ? ((high20 - close) / high20) * 100 : 999;
+  const distanceFromLow = low20 ? ((close - low20) / low20) * 100 : 999;
+  let breakoutSignal = 0;
+  if (distanceFromHigh <= 2 && volumeRatio > 1.2) breakoutSignal = 1;
+  else if (distanceFromLow <= 2 && volumeRatio > 1.2) breakoutSignal = -1;
+
+  const technicalRaw =
+    rsiSignal * 20 +
+    macdTotal * 25 +
+    smaSignal * 25 +
+    returnSignal * 10 +
+    volumeSignal * 10 +
+    breakoutSignal * 10;
+
+  const technicalScore = clamp(50 + technicalRaw / 2);
+  const summary = technicalSummaryFromScore(technicalScore);
+  const ourValue = decisionToValue(institutionalResult.decision);
+  const techValue = technicalValue(summary);
+
+  let externalConfirmationScore = 0;
+  if (ourValue === 1) {
+    if (summary === "Buy") externalConfirmationScore = 10;
+    else if (summary === "Weak Buy") externalConfirmationScore = 6;
+    else if (summary === "Neutral") externalConfirmationScore = 2;
+    else if (summary === "Weak Sell") externalConfirmationScore = -6;
+    else externalConfirmationScore = -10;
+  } else if (ourValue === -1) {
+    if (summary === "Sell") externalConfirmationScore = 10;
+    else if (summary === "Weak Sell") externalConfirmationScore = 6;
+    else if (summary === "Neutral") externalConfirmationScore = 2;
+    else if (summary === "Weak Buy") externalConfirmationScore = -6;
+    else externalConfirmationScore = -10;
+  } else {
+    if (summary === "Neutral") externalConfirmationScore = 6;
+    else externalConfirmationScore = 0;
+  }
+
+  const adjustedInstitutionalScore = clamp(institutionalResult.institutionalScore + externalConfirmationScore);
+  const adjustedDecision = adjustedDecisionFromScore(adjustedInstitutionalScore);
+
+  let finalDecision = adjustedDecision;
+  let executionGateNote = "لا توجد بوابة تنفيذ تمنع القرار بعد التأكيد الفني.";
+  if (adjustedDecision === "شراء" && institutionalResult.entryExposureRisk >= 70) {
+    finalDecision = "انتظار تنفيذ";
+    executionGateNote = "تم منع الشراء المباشر لأن خطر كشف الدخول مرتفع جدًا.";
+  } else if (adjustedDecision === "شراء" && institutionalResult.riskLevel >= 70) {
+    finalDecision = "انتظار";
+    executionGateNote = "تم تحويل الشراء إلى انتظار لأن مستوى المخاطرة مرتفع جدًا.";
+  } else if (adjustedDecision === "شراء" && institutionalResult.buildPositionScore < 45) {
+    finalDecision = "انتظار";
+    executionGateNote = "تم تحويل الشراء إلى انتظار لأن قابلية بناء مركز ضعيفة.";
+  }
+
+  let conflictPenalty = 0;
+  if (externalConfirmationScore <= -8) conflictPenalty = 10;
+  else if (externalConfirmationScore <= -3) conflictPenalty = 5;
+
+  const confidenceLevel = clamp(
+    institutionalResult.institutionalScore * 0.7 +
+      technicalScore * 0.2 +
+      institutionalResult.evidenceAgreement * 0.1 -
+      conflictPenalty
+  );
+
+  return {
+    rsiSignal,
+    macdTotal,
+    smaSignal,
+    returnSignal,
+    volumeSignal,
+    breakoutSignal,
+    technicalRaw: Math.round(technicalRaw),
+    technicalScore,
+    summary,
+    ourDecisionValue: ourValue,
+    technicalValue: techValue,
+    confirmationDifference: Number((ourValue - techValue).toFixed(2)),
+    externalConfirmationScore,
+    confirmationLabel: confirmationLabel(externalConfirmationScore),
+    adjustedInstitutionalScore,
+    adjustedDecision,
+    finalDecision,
+    executionGateNote,
+    confidenceLevel,
+    conflictPenalty,
+    details: {
+      rsi,
+      macd,
+      prevMacd,
+      sma50,
+      priceVsSma: Number(priceVsSma.toFixed(2)),
+      logReturn: Number(logReturn.toFixed(4)),
+      volumeRatio: Number(volumeRatio.toFixed(2)),
+      distanceFromHigh: Number(distanceFromHigh.toFixed(2)),
+      distanceFromLow: Number(distanceFromLow.toFixed(2)),
+    },
+    signals: [
+      { name: "RSI", value: rsiSignal, label: signalLabel(rsiSignal), explanation: "يقيس التشبع والضعف النسبي. أعلى من 70 يعني حذر، وليس بيعًا تلقائيًا." },
+      { name: "MACD", value: macdTotal, label: signalLabel(macdTotal), explanation: "يقيس الزخم. فوق الصفر أو في تحسن يعطي دعمًا فنيًا." },
+      { name: "السعر مقابل SMA_50", value: smaSignal, label: signalLabel(smaSignal), explanation: "السعر فوق متوسط 50 يوم يعني أن الاتجاه الفني أقوى." },
+      { name: "عائد آخر جلسة", value: returnSignal, label: signalLabel(returnSignal), explanation: "يعكس هل آخر حركة سعرية إيجابية أم سلبية." },
+      { name: "حجم التداول", value: volumeSignal, label: signalLabel(volumeSignal), explanation: "الصعود مع حجم تداول مرتفع أقوى من الصعود الضعيف." },
+      { name: "اختراق/ضعف قصير الأجل", value: breakoutSignal, label: signalLabel(breakoutSignal), explanation: "يفحص قرب السعر من أعلى/أدنى 20 جلسة مع نشاط تداول." },
+    ],
   };
 }

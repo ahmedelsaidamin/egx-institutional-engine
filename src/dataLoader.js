@@ -186,6 +186,13 @@ function stockFromRows(rows, symbol) {
   const returns = recent.map((r) => toNum(r[`${symbol}_Log_Return`])).filter((x) => x !== null);
   const volumes = recent.map((r) => toNum(r[`${symbol}_Volume`])).filter((x) => x !== null);
   const avgVolume = average(volumes);
+  const avgVolume20 = average(volumes.slice(-20));
+  const prevRow = recent.length >= 2 ? recent[recent.length - 2] : null;
+  const prevMacd = prevRow ? toNum(prevRow[`${symbol}_MACD`]) : null;
+  const recent20 = recent.slice(-20);
+  const high20 = Math.max(...recent20.map((r) => toNum(r[`${symbol}_Close`]) || 0));
+  const low20 = Math.min(...recent20.map((r) => toNum(r[`${symbol}_Close`]) || Infinity));
+  const logReturn = toNum(latest[`${symbol}_Log_Return`]) || 0;
   const avgDailyValueM = Math.max(1, (average(recent.map((r) => (toNum(r[`${symbol}_Volume`]) || 0) * (toNum(r[`${symbol}_Close`]) || close))) || close * volume) / 1000000);
 
   const priceAboveSMA = close && sma ? close > sma : false;
@@ -215,6 +222,21 @@ function stockFromRows(rows, symbol) {
       overExtensionRisk,
       exhaustionRisk,
       volatilityRisk,
+    },
+    market: {
+      open,
+      high,
+      low,
+      close,
+      volume,
+      avgVolume20,
+      rsi,
+      macd,
+      prevMacd,
+      sma50: sma,
+      logReturn,
+      high20,
+      low20: Number.isFinite(low20) ? low20 : low,
     },
     external: buildExternalFactors(latest),
     timeline: computeTimeline(recent, symbol),
