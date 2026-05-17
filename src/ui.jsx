@@ -174,9 +174,16 @@ export function DecisionHeader({ stocks, stock, result, setSymbol }) {
       <CardContent className="p-5 md:p-7">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div>
+            <div className="mb-4">
+              <img
+                src="/assets/egx-pulse-logo.png"
+                alt="EGX Pulse"
+                className="h-16 md:h-20 w-auto object-contain"
+              />
+            </div>
             <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
               <Building2 className="h-4 w-4" />
-              <span>EGX Institutional Decision Engine</span>
+              <span>EGX Pulse — Institutional Decision Engine</span>
             </div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tight">{stock.name}</h1>
             <p className="text-slate-500 mt-2">{stock.symbol} · {stock.sector} · آخر تاريخ: {stock.sourceDate} · السعر: {stock.price}</p>
